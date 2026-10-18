@@ -3,6 +3,7 @@ import cv2
 import os
 
 from calibration import calibrate_camera, undistort
+from thresholding import threshold_image
 
 
 def main():
@@ -31,6 +32,21 @@ def main():
         # Wait until the window is closed before moving to the next image
         while cv2.getWindowProperty('original | undistorted', cv2.WND_PROP_VISIBLE) >= 1:
             cv2.waitKey(100)
+
+    cv2.destroyAllWindows()
+
+    # Create the thresholded binary image (color + gradient) and save the example for the writeup
+    img = undistort(cv2.imread('data/test_images/test1.jpg'), mtx, dist)
+    binary = threshold_image(img)
+    result = np.hstack((img, cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)))
+    cv2.imwrite('output_images/binary_test1.jpg', result)
+
+    # Display the final result
+    cv2.imshow('undistorted | binary', cv2.resize(result, None, fx=0.5, fy=0.5))
+
+    # Wait until the window is closed before moving to the next step
+    while cv2.getWindowProperty('undistorted | binary', cv2.WND_PROP_VISIBLE) >= 1:
+        cv2.waitKey(100)
 
     cv2.destroyAllWindows()
 

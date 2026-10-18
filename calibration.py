@@ -52,10 +52,11 @@ def calibrate_camera(show=False):
         # Display the image
         if show:
             cv2.imshow('chess board', img)
-
+            cv2.waitKey(200)
+            
             # Wait until the window is closed before moving to the next image
-            while cv2.getWindowProperty('chess board', cv2.WND_PROP_VISIBLE) >= 1:
-                cv2.waitKey(100)
+            #while cv2.getWindowProperty('chess board', cv2.WND_PROP_VISIBLE) >= 1:
+            #   cv2.waitKey(100)
 
     if show:
         cv2.destroyAllWindows()
