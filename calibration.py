@@ -4,8 +4,8 @@ import glob
 import os
 
 # Paths are relative to main.py
-CALIB_IMAGES = 'data/camera_cal/calibration*.jpg'
-CALIB_FILE = 'data/camera_cal/calib.npz'
+CALIB_IMAGES = 'input_images/camera_cal/calibration*.jpg'
+CALIB_FILE = 'input_images/camera_cal/calib.npz'
 
 # Define the chess board rows and columns
 rows = 9
