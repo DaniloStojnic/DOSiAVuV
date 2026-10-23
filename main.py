@@ -9,6 +9,7 @@ from perspective import get_perspective_points, warper
 from lane_detection import get_histogram, fit_polynomial
 from curvature import measure_curvature, measure_vehicle_offset
 from drawing import draw_lane, draw_measurements
+from video import process_video
 
 
 def main():
@@ -19,31 +20,38 @@ def main():
     print('Camera matrix:\n', mtx)
     print('Distortion coefficients:\n', dist)
 
-    # Save the examples of distortion correction for the writeup (chess board and road image)
-    examples = [
-        ('input_images/camera_cal/calibration1.jpg', 'output_images/undistort_calibration1.jpg'),
-        ('input_images/test_images/test1.jpg', 'output_images/undistort_test1.jpg'),
-    ]
+    # Save the example of distortion correction on the chess board
+    img = cv2.imread('input_images/camera_cal/calibration1.jpg')
+    result = np.hstack((img, undistort(img, mtx, dist)))
+    cv2.imwrite('output_images/undistort_calibration1.jpg', result)
 
-    for src, dst in examples:
-        img = cv2.imread(src)
-        undistortedImg = undistort(img, mtx, dist)
-        result = np.hstack((img, undistortedImg))
-        cv2.imwrite(dst, result)
+    # Display the final result
+    cv2.imshow('original | undistorted', cv2.resize(result, None, fx=0.5, fy=0.5))
 
-        # Display the final result
-        cv2.imshow('original | undistorted', cv2.resize(result, None, fx=0.5, fy=0.5))
-
-        # Wait until the window is closed before moving to the next image
-        while cv2.getWindowProperty('original | undistorted', cv2.WND_PROP_VISIBLE) >= 1:
-            cv2.waitKey(100)
+    # Wait until the window is closed before moving to the next step
+    while cv2.getWindowProperty('original | undistorted', cv2.WND_PROP_VISIBLE) >= 1:
+        cv2.waitKey(100)
 
     cv2.destroyAllWindows()
 
-    # Create the thresholded binary image and save the example for the writeup
-    img = undistort(cv2.imread('input_images/test_images/test1.jpg'), mtx, dist)
-    binary = threshold_image(img)
-    result = np.hstack((img, cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)))
+    # Remove the distortion from the road image and save the example
+    img = cv2.imread('input_images/test_images/test1.jpg')
+    undistortedImg = undistort(img, mtx, dist)
+    result = np.hstack((img, undistortedImg))
+    cv2.imwrite('output_images/undistort_test1.jpg', result)
+
+    # Display the final result
+    cv2.imshow('original | undistorted', cv2.resize(result, None, fx=0.5, fy=0.5))
+
+    # Wait until the window is closed before moving to the next step
+    while cv2.getWindowProperty('original | undistorted', cv2.WND_PROP_VISIBLE) >= 1:
+        cv2.waitKey(100)
+
+    cv2.destroyAllWindows()
+
+    # Create the thresholded binary image from the undistorted image of the previous step and save the example
+    binary = threshold_image(undistortedImg)
+    result = np.hstack((undistortedImg, cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)))
     cv2.imwrite('output_images/binary_test1.jpg', result)
 
     # Display the final result
@@ -55,22 +63,25 @@ def main():
 
     cv2.destroyAllWindows()
 
-    # Perspective transform (bird's-eye view) on the straight road
+    # Perspective transform (bird's-eye view) of the binary image on the straight road
     img = undistort(cv2.imread('input_images/test_images/straight_lines1.jpg'), mtx, dist)
-    src, dst = get_perspective_points(img)
-    warped = warper(img, src, dst)
+    binary = threshold_image(img)
+    src, dst = get_perspective_points(binary)
+    warped = warper(binary, src, dst)
 
-    # Draw the source trapezoid and the destination rectangle and save the example for the writeup
-    cv2.polylines(img, [src.astype(np.int32)], True, (0, 0, 255), 3)
+    # Draw the source trapezoid and the destination rectangle and save the example
+    binary = cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
+    warped = cv2.cvtColor(warped, cv2.COLOR_GRAY2BGR)
+    cv2.polylines(binary, [src.astype(np.int32)], True, (0, 0, 255), 3)
     cv2.polylines(warped, [dst.astype(np.int32)], True, (0, 0, 255), 3)
-    result = np.hstack((img, warped))
+    result = np.hstack((binary, warped))
     cv2.imwrite('output_images/warped_straight_lines1.jpg', result)
 
     # Display the final result
-    cv2.imshow('undistorted | warped', cv2.resize(result, None, fx=0.5, fy=0.5))
+    cv2.imshow('binary | warped', cv2.resize(result, None, fx=0.5, fy=0.5))
 
     # Wait until the window is closed before moving to the next step
-    while cv2.getWindowProperty('undistorted | warped', cv2.WND_PROP_VISIBLE) >= 1:
+    while cv2.getWindowProperty('binary | warped', cv2.WND_PROP_VISIBLE) >= 1:
         cv2.waitKey(100)
 
     cv2.destroyAllWindows()
@@ -90,7 +101,7 @@ def main():
     plt.xlim([0, len(histogram)])
     plt.show()
 
-    # Sliding windows and the second order polynomial fit, save the example for the writeup
+    # Sliding windows and the second order polynomial fit, save the example
     leftFit, rightFit, result = fit_polynomial(binaryWarped)
     print('Left line fit (A, B, C): ', leftFit)
     print('Right line fit (A, B, C): ', rightFit)
@@ -111,7 +122,7 @@ def main():
 
     cv2.destroyAllWindows()
 
-    # Warp the detected lane back onto the original image and write the measurements, save the example for the writeup
+    # Warp the detected lane back onto the original image and write the measurements, save the example
     result = draw_lane(img, binaryWarped, leftFit, rightFit, src, dst)
     result = draw_measurements(result, (leftRadius + rightRadius) / 2, offset)
     cv2.imwrite('output_images/example_output_test3.jpg', result)
@@ -124,6 +135,16 @@ def main():
         cv2.waitKey(100)
 
     cv2.destroyAllWindows()
+
+    # Run the whole pipeline on the project videos (ESC stops the current video)
+    os.makedirs('output_videos', exist_ok=True)
+
+    for name in ('project_video01', 'project_video02', 'project_video03'):
+        totalFrames, validFrames, slidingWindowFrames = process_video(
+            'input_images/test_videos/' + name + '.mp4', 'output_videos/' + name + '.mp4', mtx, dist)
+
+        print('{}: {} frames, {} valid ({:.1f}%), sliding windows used in {} frames'.format(
+            name, totalFrames, validFrames, 100 * validFrames / totalFrames, slidingWindowFrames))
 
 
 if __name__ == '__main__':

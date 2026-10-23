@@ -7,10 +7,16 @@ nwindows = 9
 margin = 100
 minpix = 50
 
+# Minimum number of pixels of a line for a reliable polynomial fit
+minLinePixels = 500
+
+# Allowed lane width in the warped image, relative to the expected width (half of the image width)
+minWidthRatio = 0.7
+maxWidthRatio = 1.3
+
 
 def get_histogram(binary):
     # Sum of the white pixels in each column of the bottom half of the image
-    # The two highest peaks are the positions of the lane lines at the bottom of the image
     bottomHalf = binary[binary.shape[0] // 2:, :]
     return np.sum(bottomHalf // 255, axis=0)
 
@@ -93,3 +99,46 @@ def fit_polynomial(binary):
         cv2.polylines(outImg, [points], False, (0, 255, 255), 3)
 
     return leftFit, rightFit, outImg
+
+
+def search_around_poly(binary, leftFit, rightFit):
+    # In a video the lines move only a little between two frames, so instead of the sliding windows
+    # the pixels are searched in a band of +/- margin around the polynomials from the previous frames
+    width = binary.shape[1]
+    windowMargin = int(margin * width / 1280)
+
+    nonzeroy, nonzerox = binary.nonzero()
+
+    leftIndices = np.abs(nonzerox - np.polyval(leftFit, nonzeroy)) < windowMargin
+    rightIndices = np.abs(nonzerox - np.polyval(rightFit, nonzeroy)) < windowMargin
+
+    leftx, lefty = nonzerox[leftIndices], nonzeroy[leftIndices]
+    rightx, righty = nonzerox[rightIndices], nonzeroy[rightIndices]
+
+    return leftx, lefty, rightx, righty
+
+
+def fit_lines(leftx, lefty, rightx, righty):
+    # Fit the polynomials only if enough pixels were found for both lines
+    if len(leftx) < minLinePixels or len(rightx) < minLinePixels:
+        return None, None
+
+    leftFit = np.polyfit(lefty, leftx, 2)
+    rightFit = np.polyfit(righty, rightx, 2)
+
+    return leftFit, rightFit
+
+
+def is_lane_valid(leftFit, rightFit, imgShape):
+    # Sanity check: the lines must be roughly parallel and the lane must have the expected width
+    height, width = imgShape[:2]
+    expectedWidth = width / 2
+
+    # Lane width at the top, in the middle and at the bottom of the warped image
+    for y in (0, height // 2, height - 1):
+        laneWidth = np.polyval(rightFit, y) - np.polyval(leftFit, y)
+
+        if laneWidth < minWidthRatio * expectedWidth or laneWidth > maxWidthRatio * expectedWidth:
+            return False
+
+    return True
