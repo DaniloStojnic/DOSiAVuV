@@ -1,10 +1,14 @@
 import numpy as np
 import cv2
 import os
+import matplotlib.pyplot as plt
 
 from calibration import calibrate_camera, undistort
 from thresholding import threshold_image
 from perspective import get_perspective_points, warper
+from lane_detection import get_histogram, fit_polynomial
+from curvature import measure_curvature, measure_vehicle_offset
+from drawing import draw_lane, draw_measurements
 
 
 def main():
@@ -36,7 +40,7 @@ def main():
 
     cv2.destroyAllWindows()
 
-    # Create the thresholded binary image (color + gradient) and save the example for the writeup
+    # Create the thresholded binary image and save the example for the writeup
     img = undistort(cv2.imread('input_images/test_images/test1.jpg'), mtx, dist)
     binary = threshold_image(img)
     result = np.hstack((img, cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)))
@@ -67,6 +71,56 @@ def main():
 
     # Wait until the window is closed before moving to the next step
     while cv2.getWindowProperty('undistorted | warped', cv2.WND_PROP_VISIBLE) >= 1:
+        cv2.waitKey(100)
+
+    cv2.destroyAllWindows()
+
+    # Detect the lane line pixels and fit them with a polynomial
+    img = undistort(cv2.imread('input_images/test_images/test3.jpg'), mtx, dist)
+    src, dst = get_perspective_points(img)
+    binaryWarped = warper(threshold_image(img), src, dst)
+
+    # Histogram of the bottom half of the warped binary image
+    histogram = get_histogram(binaryWarped)
+    plt.figure()
+    plt.title('Histogram of the bottom half of the warped binary image')
+    plt.xlabel('Column (x)')
+    plt.ylabel('# of white pixels')
+    plt.plot(histogram)
+    plt.xlim([0, len(histogram)])
+    plt.show()
+
+    # Sliding windows and the second order polynomial fit, save the example for the writeup
+    leftFit, rightFit, result = fit_polynomial(binaryWarped)
+    print('Left line fit (A, B, C): ', leftFit)
+    print('Right line fit (A, B, C): ', rightFit)
+    cv2.imwrite('output_images/color_fit_lines_test3.jpg', result)
+
+    # Radius of curvature of the lane and the position of the vehicle with respect to the lane center
+    leftRadius, rightRadius = measure_curvature(leftFit, rightFit, binaryWarped.shape)
+    offset = measure_vehicle_offset(leftFit, rightFit, binaryWarped.shape)
+    print('Radius of curvature: left {:.0f} m, right {:.0f} m, mean {:.0f} m'.format(leftRadius, rightRadius, (leftRadius + rightRadius) / 2))
+    print('Vehicle offset from the lane center: {:+.2f} m'.format(offset))
+
+    # Display the final result
+    cv2.imshow('sliding windows and polynomial fit', cv2.resize(result, None, fx=0.5, fy=0.5))
+
+    # Wait until the window is closed before moving to the next step
+    while cv2.getWindowProperty('sliding windows and polynomial fit', cv2.WND_PROP_VISIBLE) >= 1:
+        cv2.waitKey(100)
+
+    cv2.destroyAllWindows()
+
+    # Warp the detected lane back onto the original image and write the measurements, save the example for the writeup
+    result = draw_lane(img, binaryWarped, leftFit, rightFit, src, dst)
+    result = draw_measurements(result, (leftRadius + rightRadius) / 2, offset)
+    cv2.imwrite('output_images/example_output_test3.jpg', result)
+
+    # Display the final result
+    cv2.imshow('lane on the original image', cv2.resize(result, None, fx=0.5, fy=0.5))
+
+    # Wait until the window is closed before moving to the next step
+    while cv2.getWindowProperty('lane on the original image', cv2.WND_PROP_VISIBLE) >= 1:
         cv2.waitKey(100)
 
     cv2.destroyAllWindows()
